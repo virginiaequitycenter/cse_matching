@@ -1,0 +1,393 @@
+---
+title: "Combined Collection Matched Analysis"
+author: "Asha Muralidharan"
+date: "2025-03-12"
+output: html_document
+---
+
+##############################################################
+# ACPS Career Self-Efficacy Analysis - Analysis Script          
+# Authors: Asha Muralidharan     
+# GitHub: asha-ec                              
+# Last revised: 2025-03-10  
+# Summary: A document that cleans and combines the data from the Career Self-Efficacy 
+#          Surveys implemented on Starr Hill Pathways students and ACPS students
+#          in 7th and 8th grade over two collection periods in 2023 and 2024
+##############################################################
+
+##############################################################
+# Library Intros                               
+##############################################################
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+##############################################################
+# Call in libraries of importance                           
+##############################################################
+
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(plotrix)
+
+library(MatchIt)
+library(WeightIt)
+library(cobalt)
+library(marginaleffects)
+library(stargazer)
+
+##############################################################
+# Pull in Matched Data                            
+##############################################################
+
+cse_matched <- read_csv("../data/cse_matched_combinedcollection.csv")
+
+##############################################################
+# Factorize necessary variables                       
+##############################################################
+
+cse_matched <- cse_matched %>% mutate_at(c("survey_administration","race_ethnicity",                                      "class_year","avid","EL","gender","sped","econ_dis"),as.factor)
+
+cse_matched <- within(cse_matched, survey_administration <- relevel(survey_administration, ref = "2023"))
+cse_matched <- within(cse_matched, gender <- relevel(gender, ref = "M"))
+cse_matched <- within(cse_matched, race_ethnicity <- relevel(race_ethnicity, ref = "WH"))
+cse_matched <- within(cse_matched, class_year <- relevel(class_year, ref = "2028"))
+cse_matched <- within(cse_matched, avid <- relevel(avid, ref = "N"))
+cse_matched <- within(cse_matched, EL <- relevel(EL, ref = "N"))
+cse_matched <- within(cse_matched, sped <- relevel(sped, ref = "N"))
+cse_matched <- within(cse_matched, econ_dis <- relevel(econ_dis, ref = "N"))
+
+```
+
+
+```{r item_analysis}
+##############################################################
+# Item Analysis Match- How do SHP and like ACPS students compare
+#                      on responses to each survey question?
+##############################################################
+
+item_analysis <- matchit(starr_hill ~
+                     SE1+
+                     SE2+
+                     SE3+
+                     SE4+
+                     SE5+
+                     SE6+
+                     SE7+
+                     SE8+
+                     SE9+
+                     SE10+
+                     SE11+
+                     OE1+
+                     OE2+
+                     OE3+
+                     OE4+
+                     OE5+
+                     OE6+
+                     OE7+
+                     OE8+
+                     OE9+
+                     OE10+
+                     CSE_composite+
+                     SE_subscore+
+                     OE_subscore,
+                   data =cse_matched, method = NULL)
+
+summary(item_analysis)
+```
+```{r composite_all_reg, echo=FALSE}
+
+##############################################################
+# Composite Model: How do SHP students perform on the Middle School
+#                  Career Self-Efficacy and Outcome Expectations Scale
+#                  in comparison to like ACPS students when controlling
+#                  for gender, race, and school group participation?
+##############################################################
+
+composite_model <- lm(CSE_composite ~ starr_hill*(gender+race_ethnicity+avid+EL+sped), 
+                      data = cse_matched, weights=weights)
+
+summary(composite_model)
+
+##############################################################
+# Composite Model- No Subgroup Analysis
+##############################################################
+
+avg_comparisons(composite_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                wts="weights")
+
+# There is no statistically significant difference in the SHP students' composite score
+# and those of their like peers at ACPS in relation to this model.
+
+```
+
+```{r composite_gender_race_reg, echo=FALSE}
+
+##############################################################
+# Composite Model- Gender/Race Analysis
+##############################################################
+
+avg_comparisons(composite_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by = c("race_ethnicity","gender"),
+                wts="weights")
+
+
+
+# In comparison to their ACPS peers, White Girls, Asian Girls, and Black Girls had higher
+# career self-efficacy and outcome expectations at a 95% confidence interval. 
+# In comparison to their ACPS peers, Hispanic Boys and Multiracial Boys had lower
+# career self-efficacy  and outcome expectations at a 95% confidence interval.
+
+```
+
+
+```{r composite_avid_reg, echo=FALSE}
+
+##############################################################
+# Composite Model- AVID Participation Analysis
+#                  This model analyzes the subgroup of students
+#                  participating in AVID, Advancement Via Individual Determination,
+#                  another Career and College Readiness program. 
+##############################################################
+
+avg_comparisons(composite_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by = "avid",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in AVID had higher
+# career self-efficacy and outcome expectations at a 95% confidence interval than students in AVID alone.
+```
+
+```{r composite_sped_reg, echo=FALSE}
+
+##############################################################
+# Composite Model- SPED Participation Analysis
+#                  This model analyzes the subgroup of students
+#                  participating in special education programming. 
+##############################################################
+
+avg_comparisons(composite_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by = "sped",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in SPED programming had higher
+# career self-efficacy and outcome expectations at a 95% confidence interval than students in SPED alone.
+```
+```{r composite_el_reg, echo=FALSE}
+
+##############################################################
+# Composite Model- English Learner Analysis
+#                  This model analyzes the subgroup of students
+#                  participating in english learner programming.
+##############################################################
+
+avg_comparisons(composite_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="EL",
+                wts="weights")
+
+# There is no statistically significant difference in the SHP's EL students' composite score
+# and those of their like peers at ACPS in relation to this model.
+
+```
+```{r SE_all_reg, echo=FALSE}
+
+##############################################################
+# Self-Efficacy Subscale Model: How do SHP students perform on the Self-Efficacy subscale
+#                               in comparison to like ACPS students when controlling
+#                               for gender, race, and school group participation?
+##############################################################
+
+SE_model <- lm(SE_subscore ~ starr_hill*(gender+race_ethnicity+avid+EL+sped), 
+                      data = cse_matched, weights=weights)
+
+summary(SE_model)
+
+avg_comparisons(SE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                wts="weights")
+
+# There is no statistically significant difference in the SHP students' self-efficacy
+# subscale score and those of their like peers at ACPS in relation to this model.
+
+```
+```{r SE_gender_race_reg, echo=FALSE}
+##############################################################
+# SE Subscale Model- Gender/Race Analysis
+##############################################################
+avg_comparisons(SE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by=c("race_ethnicity","gender"),
+                wts="weights")
+
+# In comparison to their ACPS peers, Black Girls had higher
+# career self-efficacy at a 95% confidence interval. 
+# In comparison to their ACPS peers, Hispanic Boys, Multiracial Boys, 
+# and Multiracial Girls had lower career self-efficacy at a 95% confidence interval.
+
+```
+```{r SE_avid_reg, echo=FALSE}
+
+##############################################################
+# SE Subscale Model- AVID Analysis
+##############################################################
+
+avg_comparisons(SE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="avid",
+                wts="weights")
+
+# There is no statistically significant difference in the SHP and AVID students' self-efficacy subscale score and those of their like peers at ACPS in relation to this model.
+
+```
+
+```{r SE_sped_reg, echo=FALSE}
+
+##############################################################
+# SE Subscale Model- Special Education Analysis
+##############################################################
+
+avg_comparisons(SE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="sped",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in SPED programming had higher career self-efficacy and outcome expectations at a 99% confidence interval than students in SPED alone.
+
+```
+
+```{r SE_el_reg, echo=FALSE}
+##############################################################
+# SE Subscale Model- English Learner Analysis
+##############################################################
+
+avg_comparisons(SE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="EL",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in EL programming had lower career self-efficacy and outcome expectations at a 99% confidence interval than students in EL alone.
+
+```
+
+```{r OE_all_reg, echo=FALSE}
+
+##############################################################
+# Outcome Expectations Subscale Model: How do SHP students perform on the
+#                                      Outcome Expectations subscale in comparison
+#                                      to like ACPS students when controlling for
+#                                      gender, race, and school group participation?
+##############################################################
+
+OE_model <- lm(OE_subscore ~ starr_hill*(gender+race_ethnicity+avid+EL+sped), 
+                      data = cse_matched, weights=weights)
+
+summary(OE_model)
+
+avg_comparisons(OE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                wts="weights")
+
+# There is no statistically significant difference in the SHP students' outcome expectations
+# subscale score and those of their like peers at ACPS in relation to this model.
+
+
+```
+
+```{r OE_gender_race_reg, echo=FALSE}
+##############################################################
+# SE Subscale Model- Gender/Race Analysis
+##############################################################
+
+avg_comparisons(OE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by=c("race_ethnicity","gender"),
+                wts="weights")
+
+# In comparison to their ACPS peers, Black Girls had higher
+# outcome expectations at a 95% confidence interval. 
+```
+
+```{r OE_avid_reg, echo=FALSE}
+
+##############################################################
+# OE Subscale Model- AVID Analysis
+##############################################################
+
+
+avg_comparisons(OE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="avid",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in AVID had higher
+# outcome expectations at a 95% confidence interval than students in AVID alone.
+
+```
+
+```{r OE_sped_reg, echo=FALSE}
+
+##############################################################
+# OE Subscale Model- SPED Analysis
+##############################################################
+
+avg_comparisons(OE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="sped",
+                wts="weights")
+
+# In comparison to their ACPS peers, SHP students who were also in SPED programming had higher outcome expectations at a 99% confidence interval than students in SPED alone.
+
+```
+
+```{r OE_el_reg, echo=FALSE}
+
+##############################################################
+# OE Subscale Model- English Learner Analysis
+##############################################################
+
+avg_comparisons(OE_model,
+                variables = "starr_hill",
+                vcov= ~subclass,
+                newdata = subset(cse_matched, starr_hill == 1),
+                by="EL",
+                wts="weights")
+
+# There is no statistically significant difference in the SHP English Learner students' outcome expectations subscale score and those of their like peers at ACPS in relation to this model.
+
+
+```
+
